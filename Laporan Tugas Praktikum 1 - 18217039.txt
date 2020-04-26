@@ -1,0 +1,258 @@
+1.....
+
+Alter Table payment
+Add CHECK ((0<=amount) AND (amount<=100));
+
+Query returned successfully in 98 msec.
+
+Insert into payment (customer_id,staff_id,rental_id,amount,payment_date)
+Values (1,1,2,105,'2017-01-24 21:40:19.996577+07')
+
+ERROR:  new row for relation "payment" violates check constraint "payment_amount_check"
+DETAIL:  Failing row contains (32101, 1, 1, 2, 105.00, 2017-01-24 21:40:19.996577+07).
+SQL state: 23514
+
+2.....
+
+Alter Table payment
+drop constraint payment_amount_check;
+
+Query returned successfully in 135 msec.
+
+Insert into payment (customer_id,staff_id,rental_id,amount,payment_date)
+Values (1,1,2,100.99,'2017-01-24 21:40:19.996577+07')
+
+Query returned successfully in 74 msec.
+
+3....
+
+Alter table payment
+add total_film numeric;
+
+Query returned successfully in 252 msec.
+
+Create Function decamount() returns trigger AS $example_table$
+begin
+	Update  payment 
+	set amount = new.total_film -0.01;
+	return new;
+END;
+$example_table$ LANGUAGE plpgsql;
+
+ Query returned successfully in 92 msec.
+
+Create trigger fill_amount after insert on payment
+for each row
+execute procedure decamount();
+
+Query returned successfully in 76 msec.
+
+Insert into payment (customer_id, staff_id, rental_id, amount, total_film, payment_date)
+Values (1,1,2,0,9,CURRENT_TIMESTAMP)
+
+Query returned successfully in 166 msec.
+
+Select amount from payment where total_film = 9;
+
+Successfully run. Total query runtime: 83 msec.
+1 rows affected.
+
+8.99
+
+4.....
+
+Alter table category
+add column count_film integer Default 0,
+add check (count_film Is Not NULL);
+
+Query returned successfully in 206 msec.
+
+5.....
+
+Alter table payment
+add column discount numeric default 0,
+add column amount_after_discount numeric,
+add check (amount_after_discount = amount-discount);
+
+Drop trigger fill_amount;
+
+Create Function checkdiscamount() returns trigger AS $example_table$
+begin
+	if new.amount_after_discount!=new.total_film-0.01-new.discount then
+	new.customer_id:=NULL;
+	End if;
+	return new;
+END;
+$example_table$ LANGUAGE plpgsql;
+
+Create trigger checkdiscamount before insert on payment
+for each row
+execute procedure checkdiscamount();
+
+Query returned successfully in 82 msec.
+
+Insert into payment (customer_id, staff_id, rental_id, amount, total_film, discount, amount_after_discount, payment_date)
+Values (1,1,2,0,8,2,5.99,CURRENT_TIMESTAMP)
+
+Query returned successfully in 200 msec.
+
+32113	1	1	2	7.99	"2020-04-16 01:42:12.756959+07"	8	2	5.99
+
+Insert into payment (customer_id, staff_id, rental_id, amount, total_film, discount, amount_after_discount, payment_date)
+Values (1,1,2,0,8,2,7.99,CURRENT_TIMESTAMP)
+
+ERROR:  null value in column "customer_id" violates not-null constraint
+DETAIL:  Failing row contains (32118, null, 1, 2, 0.00, 2020-04-16 02:25:38.049671+07, 8, 2, 7.99).
+SQL state: 23502
+
+6...
+
+drop trigger checkdiscamount on payment;
+
+Create Function filldiscamount() returns trigger AS $example_table$
+begin
+	Update  payment 
+	set amount_after_discount = new.total_film -0.01-new.discount;
+	return new;
+END;
+$example_table$ LANGUAGE plpgsql;
+
+Create trigger filldiscamount after insert on payment
+for each row
+execute procedure filldiscamount();
+
+Create trigger changediscamount after update on payment
+for each row
+execute procedure filldiscamount();
+
+Create trigger deldiscamount after delete on payment
+for each row
+execute procedure filldiscamount();
+
+7.....
+
+Alter table customer
+Add constraint email_check 
+Check (email like '%_@__%.__%');
+
+Query returned successfully in 74 msec.
+
+8.....
+
+Alter table customer
+Add column loyalty_status integer default 1,
+Add constraint upperlimit check (loyalty_status <= 5),
+Add constraint lowerlimit check (loyalty_status >=1);
+
+Create Function addLoyalty() returns trigger AS $$
+begin
+	If (new.loyalty_status < old.loyalty_status) then
+		new.loyalty_status := NULL;
+	end if;
+	return new;
+END;
+$$ LANGUAGE plpgsql;
+
+Create trigger upgrade_loyalty before update on customer
+for each row
+execute procedure addloyalty();
+
+Select * from customer where customer_id=1
+
+1	1	"MARY"	"SMITH"	"MARY.SMITH@sakilacustomer.org"	5	true	"2017-02-14"	"2017-02-15 09:57:20+07"	1	1
+
+Update customer 
+set loyalty_status = 3
+where customer_id=1;
+
+1	1	"MARY"	"SMITH"	"MARY.SMITH@sakilacustomer.org"	5	true	"2017-02-14"	"2020-04-16 23:51:36.551921+07"	1	3
+
+Update customer 
+set loyalty_status = 1
+where customer_id=1;
+
+ERROR:  null value in column "loyalty_status" violates not-null constraint
+DETAIL:  Failing row contains (1, 1, MARY, SMITH, MARY.SMITH@sakilacustomer.org, 5, t, 2017-02-14, 2020-04-17 02:21:55.060719+07, 1, null).
+SQL state: 23502
+
+1	1	"MARY"	"SMITH"	"MARY.SMITH@sakilacustomer.org"	5	true	"2017-02-14"	"2020-04-17 02:21:50.615154+07"	1	3
+
+Update customer 
+set loyalty_status = 6
+where customer_id=1;
+
+ERROR:  new row for relation "customer" violates check constraint "upperlimit"
+DETAIL:  Failing row contains (1, 1, MARY, SMITH, MARY.SMITH@sakilacustomer.org, 5, t, 2017-02-14, 2020-04-17 02:23:32.497315+07, 1, 6).
+SQL state: 23514
+
+1	1	"MARY"	"SMITH"	"MARY.SMITH@sakilacustomer.org"	5	true	"2017-02-14"	"2020-04-17 02:21:50.615154+07"	1	3
+
+9.....
+
+Create Function addcity() returns trigger AS $$
+begin
+	if new.country = 'Indonesia' then
+		Insert into city (city,country_id,last_update)
+		Values ('Bandung',(Select country_id from country where country = 'Indonesia' ),CURRENT_TIMESTAMP),
+			('Jakarta',(Select country_id from country where country = 'Indonesia'),CURRENT_TIMESTAMP);
+	end if;
+	return new;
+END;
+$$ LANGUAGE plpgsql;
+
+Create trigger addcity after insert or update on country
+for each row
+execute procedure addcity();
+
+Insert into country (country, last_update)
+values ('Indonesia',current_timestamp);
+
+Query returned successfully in 137 msec.
+
+Select country.country_id, country.country, city.city
+from country inner join city on country.country_id=city.country_id
+where country.country = 'Indonesia'
+
+114	"Indonesia"	"Bandung"
+114	"Indonesia"	"Jakarta"
+
+10.....
+
+Alter table city
+DROP CONSTRAINT city_country_id_fkey 
+
+Alter table city
+ADD CONSTRAINT city_country_id_fkey 
+  FOREIGN KEY (country_id) 
+  REFERENCES country(country_id) 
+  ON DELETE CASCADE;
+
+Create Function delcity() returns trigger AS $$
+begin
+	Delete From city Where country_id = old.country_id;
+	Delete From country where country_id=old.country_id;
+	return new;
+END;
+$$ LANGUAGE plpgsql;
+
+Create trigger delcity after delete on city
+for each row
+execute procedure delcity();
+
+Select country.country_id, country.country, city.city
+from country inner join city on country.country_id=city.country_id
+where country.country_id='114';
+
+114	"Indonesia"	"Bandung"
+114	"Indonesia"	"Jakarta"
+
+Delete from city where city.city_id = '602';
+
+DELETE 1
+
+Select country.country_id, country.country, city.city
+from country inner join city on country.country_id=city.country_id
+where country.country_id='114';
+
+Successfully run. Total query runtime: 198 msec.
+0 rows affected.

@@ -1,0 +1,435 @@
+########### No 1 ##########:
+
+kode :
+ALTER TABLE payment ADD CONSTRAINT hundredPrice CHECK (
+	amount > 0
+	AND amount <= 100
+);
+
+Hasil run kode: 
+ALTER TABLE
+Query returned successfully in 161 msec.
+
+kode untuk testing :
+INSERT INTO payment (amount, customer_id, staff_id, rental_id, payment_date)
+VALUES (101, 460,1,5000,'2016-06-22 19:10:25-07');
+
+Hasil testing :
+ERROR:  new row for relation "payment" violates check constraint "hundredprice"
+DETAIL:  Failing row contains (32103, 460, 1, 5000, 101.00, 2016-06-23 09:10:25+07).
+SQL state: 23514
+
+########## NO 2 ##########:
+
+Kode :
+ALTER TABLE payment
+DROP CONSTRAINT hundredprice;
+
+Hasil run kode :
+ALTER TABLE
+Query returned successfully in 151 msec.
+
+kode untuk insert dengan amount 100.99 dollar :
+INSERT INTO payment (amount, customer_id, staff_id, rental_id, payment_date)
+VALUES (100.99, 460,1,5000,'2016-06-22 19:10:25-07');
+
+kode untuk testing select :
+Select * from payment where amount = 100.99;
+
+hasil kode untuk testing select :
+ payment_id | customer_id | staff_id | rental_id | amount |      payment_date
+------------+-------------+----------+-----------+--------+------------------------
+      32104 |         460 |        1 |      5000 | 100.99 | 2016-06-23 09:10:25+07
+(1 row)
+
+########## NO 3 ##########:
+
+kode yang di-run untuk membuat tabel :
+
+A.Buat tabel kosong dengan isi
+ALTER TABLE payment ADD COLUMN total_film numeric;
+
+Hasil A: 
+ALTER TABLE
+Query returned successfully in 107 msec.
+
+B.Isi tabel dengan nilai yang diinginkan
+UPDATE payment 
+SET total_film = amount+0.01;
+
+Hasil B:
+UPDATE 1158
+Query returned successfully in 186 msec.
+
+C.Buat constraint not null di total_film
+ALTER TABLE payment ALTER COLUMN total_film SET NOT NULL;
+
+Hasil C:
+ALTER TABLE
+Query returned successfully in 210 msec.
+
+D.Buat Funtion Trigger
+CREATE OR REPLACE FUNCTION fTrigger1()
+RETURNS trigger AS 
+$$
+BEGIN
+	UPDATE payment
+	SET amount=(total_film-0.01)
+	WHERE payment_id=NEW.payment_id;
+	RETURN NEW;
+END;
+$$ 
+LANGUAGE plpgsql;
+
+Hasil D:
+CREATE FUNCTION
+Query returned successfully in 329 msec.
+
+E.Buat trigger tersebut 
+CREATE TRIGGER updateAmount
+  AFTER INSERT OR UPDATE
+  of total_film ON payment
+  FOR EACH ROW
+  EXECUTE PROCEDURE fTrigger1();
+
+Hasil E:
+CREATE TRIGGER
+Query returned successfully in 130 msec.
+
+Kode untuk testing:
+INSERT INTO payment (amount, customer_id, staff_id, rental_id, payment_date, total_film)
+VALUES (0, 460,1,5001,'2016-06-22 19:10:25-07',9);
+
+praktikum1=# select * from payment where rental_id=5001;
+ payment_id | customer_id | staff_id | rental_id | amount |      payment_date      | total_film
+------------+-------------+----------+-----------+--------+------------------------+------------
+      32106 |         460 |        1 |      5001 |   8.99 | 2016-06-23 09:10:25+07 |          9
+(1 row)
+
+########## NO 4 ##########
+
+A. Buat kolom dengan kondisi not null
+ALTER TABLE category 
+ADD COLUMN count_film integer NOT NULL
+DEFAULT 0;
+
+Hasil kode:
+ALTER TABLE
+Query returned successfully in 3 secs 151 msec.
+
+B. Beri constraint pada kolom tersebut
+ALTER TABLE category
+ADD CONSTRAINT notNullCountFilm
+CHECK (count_film IS NOT NULL);
+
+Hasil B:
+ALTER TABLE
+Query returned successfully in 131 msec.
+
+praktikum1=# select * from category;
+ category_id |    name     |      last_update       | count_film
+-------------+-------------+------------------------+------------
+           1 | Action      | 2017-02-15 09:46:27+07 |          0
+           2 | Animation   | 2017-02-15 09:46:27+07 |          0
+           3 | Children    | 2017-02-15 09:46:27+07 |          0
+           4 | Classics    | 2017-02-15 09:46:27+07 |          0
+           5 | Comedy      | 2017-02-15 09:46:27+07 |          0
+           6 | Documentary | 2017-02-15 09:46:27+07 |          0
+           7 | Drama       | 2017-02-15 09:46:27+07 |          0
+           8 | Family      | 2017-02-15 09:46:27+07 |          0
+           9 | Foreign     | 2017-02-15 09:46:27+07 |          0
+          10 | Games       | 2017-02-15 09:46:27+07 |          0
+          11 | Horror      | 2017-02-15 09:46:27+07 |          0
+          12 | Music       | 2017-02-15 09:46:27+07 |          0
+          13 | New         | 2017-02-15 09:46:27+07 |          0
+          14 | Sci-Fi      | 2017-02-15 09:46:27+07 |          0
+          15 | Sports      | 2017-02-15 09:46:27+07 |          0
+          16 | Travel      | 2017-02-15 09:46:27+07 |          0
+(16 rows)
+
+########## NO 5 ##########
+
+A. Tambah kolom diskon dengan nilai default 0
+ALTER TABLE payment ADD COLUMN 
+discount integer DEFAULT 0;
+
+B. Tambah kolom amount_after_discount
+ALTER TABLE payment ADD COLUMN 
+amount_after_discount numeric(5,2);
+
+C. isi nilai kolom baru
+UPDATE payment
+set amount_after_discount = (total_film-0.01)-((total_film-0.01)*discount*0.01);
+
+D. Tambahkan constraint untuk mengecek apabila input benar atau tidak
+ALTER TABLE payment ADD CONSTRAINT amountFinal CHECK(
+	amount_after_discount = (total_film-0.01)-((total_film-0.01)*discount*0.01)
+);
+
+TEST CASE
+
+Input Benar:
+INSERT INTO payment (amount, customer_id, staff_id, rental_id, payment_date, total_film, amount_after_discount, discount)
+VALUES (0, 460,1,5002,'2016-06-23 19:10:25-07',200.01, 190, 5);
+
+OUTPUT Benar:
+praktikum1=# select * from payment where discount=5;
+ payment_id | customer_id | staff_id | rental_id | amount |      payment_date      | total_film | discount | amount_after_discount
+------------+-------------+----------+-----------+--------+------------------------+------------+----------+-----------------------
+      32108 |         460 |        1 |      5002 | 200.00 | 2016-06-24 09:10:25+07 |     200.01 |        5 |                190.00
+(1 row)
+
+INPUT Salah:
+INSERT INTO payment (amount, customer_id, staff_id, rental_id, payment_date, total_film, amount_after_discount, discount)
+VALUES (0, 460,1,5003,'2016-06-23 19:10:25-07',200.01, 191, 5);
+
+OUTPUT Salah:
+ERROR:  new row for relation "payment" violates check constraint "amountfinal"
+DETAIL:  Failing row contains (32109, 460, 1, 5003, 0.00, 2016-06-24 09:10:25+07, 200.01, 5, 191.00).
+SQL state: 23514
+
+########## NO 6 ##########
+
+A. Buat function trigger untuk mengisi nilai amount_after_discount secara otomatis
+CREATE OR REPLACE FUNCTION fTrigger6()
+RETURNS trigger AS 
+$$
+BEGIN
+	UPDATE payment 
+	SET amount_after_discount =((total_film-0.01)-((total_film-0.01)*discount*0.01))
+	WHERE payment_id = NEW.payment_id;
+	RETURN NEW;
+END;
+$$ 
+LANGUAGE plpgsql;
+
+B. Buat Triger yang akan dihubungkan dengan amount_after_discount
+CREATE TRIGGER updateAmountFinal
+  AFTER INSERT OR UPDATE
+  of amount, discount ON payment
+  FOR EACH ROW
+  EXECUTE PROCEDURE fTrigger6();
+
+C. Lakukan testing dengan input data tanpa amount_after_discount
+INSERT INTO payment (amount, customer_id, staff_id, rental_id, payment_date, total_film, discount)
+VALUES (0, 460 , 1, 5004,'2016-06-24 19:10:25-07',200.01, 5);
+
+praktikum1=# select * from payment where rental_id = 5004;
+ payment_id | customer_id | staff_id | rental_id | amount |      payment_date      | total_film | discount | amount_after_discount
+------------+-------------+----------+-----------+--------+------------------------+------------+----------+-----------------------
+      32113 |         460 |        1 |      5004 | 200.00 | 2016-06-25 09:10:25+07 |     200.01 |        5 |                190.00
+(1 row)
+
+########## NO 7 ##########
+
+kode:
+ALTER TABLE CUSTOMER
+ADD CONSTRAINT checkEmail
+CHECK (email like '%_@__%.__%');
+
+INPUT SALAH:
+UPDATE customer
+SET email = 'PATRICIA.JOHNSON@sakilacustomerorg' WHERE customer_id=2;
+
+ERROR:  new row for relation "customer" violates check constraint "checkemail"
+DETAIL:  Failing row contains (2, 1, PATRICIA, JOHNSON, PATRICIA.JOHNSON@sakilacustomerorg, 6, t, 2017-02-14, 2020-04-18 23:33:00.236116+07, 1).
+SQL state: 23514
+
+########## NO 8 ##########
+
+kode:
+A. Buat terlebih dahulu loyalty status dengan nilai antara 1 sampai lima dengan nilai default 1
+ALTER TABLE customer ADD COLUMN 
+loyalty_status integer DEFAULT 1
+CONSTRAINT checkLoyaltyStatus CHECK 
+(loyalty_status >=1 AND loyalty_status <= 5);
+
+B.Buat fungsi trigger agar loyalty status tidak bisa berkurang
+CREATE OR REPLACE FUNCTION fTrigger8()
+RETURNS trigger AS 
+$$
+BEGIN 
+	IF NEW.loyalty_status <= OLD.loyalty_status THEN
+		RAISE EXCEPTION 'Value cannot degrade';
+	END IF;
+	RETURN NEW;
+END;
+$$ 
+LANGUAGE plpgsql;
+
+C.Terapkan trigger pada loyalty_status
+CREATE TRIGGER updateLoyaltyStatus
+  AFTER INSERT OR UPDATE
+  of loyalty_status ON customer
+  FOR EACH ROW
+  EXECUTE PROCEDURE fTrigger8();
+
+D.Lakukan Test Case
+
+TEST CASE A:
+UPDATE customer
+SET loyalty_status = 3
+WHERE customer_id = 10;
+
+praktikum1=# select customer_id,loyalty_status from customer where customer_id =10;
+ customer_id | loyalty_status
+-------------+----------------
+          10 |              3
+(1 row)
+
+UPDATE customer
+SET loyalty_status = 1
+WHERE customer_id = 10;
+
+ERROR:  Value cannot degrade
+CONTEXT:  PL/pgSQL function ftrigger8() line 4 at RAISE
+SQL state: P0001
+
+TEST CASE B:
+UPDATE customer
+SET loyalty_status = 6
+WHERE customer_id = 10;
+
+ERROR:  new row for relation "customer" violates check constraint "checkloyaltystatus"
+DETAIL:  Failing row contains (10, 1, DOROTHY, TAYLOR, DOROTHY.TAYLOR@sakilacustomer.org, 14, t, 2017-02-14, 2020-04-19 00:06:32.663508+07, 1, 6).
+SQL state: 23514
+
+########## NO 9 ##########
+
+A. Buat terlebih dahulu fungsi trigger
+
+CREATE OR REPLACE FUNCTION fTrigger9()
+RETURNS trigger AS 
+$$
+BEGIN 
+	IF NEW.country = 'Indonesia' THEN
+		INSERT INTO city(city_id,city,country_id,last_update)
+		VALUES (default,'Bandung', NEW.country_id,now()),
+		(default,'Jakarta', NEW.country_id,now());
+	END IF;
+	RETURN NEW;
+END;
+$$ 
+LANGUAGE plpgsql;
+
+B. Pasang fungsi trigger di atas kepada country_name
+
+CREATE TRIGGER updateCityIndonesia
+  AFTER INSERT OR UPDATE
+  of country,country_id ON country
+  FOR EACH ROW
+  EXECUTE PROCEDURE fTrigger9();
+
+C. Lakukan Test Case
+
+INSERT INTO country(country_id,country,last_update) VALUES (110,'Indonesia',now());
+INSERT 0 1
+Query returned successfully in 134 msec.
+
+praktikum1=# select * from city where country_id = 110;
+ city_id |  city   | country_id |          last_update
+---------+---------+------------+-------------------------------
+     605 | Bandung |        110 | 2020-04-19 00:40:30.687009+07
+     606 | Jakarta |        110 | 2020-04-19 00:40:30.687009+07
+(2 rows)
+
+########## NO 10 ########## ASUMSI Country_ID Indonesia selalu 110.
+
+A. Hapus constraint "city_country_id_fkey" pada tabel city dan address
+
+ALTER TABLE city DROP CONSTRAINT city_country_id_fkey;
+ALTER TABLE address DROP CONSTRAINT address_city_id_fkey;
+
+B. Buat DELETE CASCADE agar saat fk dihapus, parentnya juga ikut dihapus
+
+ALTER TABLE city ADD FOREIGN KEY (country_id)
+REFERENCES country(country_id) ON DELETE CASCADE;
+
+C. Buat fungsi trigger pada city untuk menghapus data pada country dengan id yang sama.
+Ketika country menghapus data tersebut, secara tidak langsung memanggil command
+pada poin B dimana dia akan menghapus semua data childnya yang berupa table city
+
+CREATE OR REPLACE FUNCTION child()
+RETURNS trigger AS 
+$$
+BEGIN 
+	IF (old.country_id = 110) THEN
+	DELETE FROM country WHERE country_id = 110;
+	END IF;
+RETURN OLD;
+END;
+$$ 
+LANGUAGE plpgsql;
+
+D. Buatlah trigger pada tabel city dengan menjalankan procedure pada poin C
+
+CREATE TRIGGER main
+  AFTER DELETE
+  on city
+  FOR EACH ROW
+  EXECUTE PROCEDURE child();
+
+E.Lakukan test case dengan menghapus data pada country, dan juga data pada city
+
+Kondisi sebelumnya :
+
+praktikum1=# select * from country where country_id = 110;
+ country_id |  country  |          last_update
+------------+-----------+-------------------------------
+        110 | Indonesia | 2020-04-19 03:58:18.381849+07
+(1 row)
+
+praktikum1=# select * from city where country_id =110;
+ city_id |  city   | country_id |          last_update
+---------+---------+------------+-------------------------------
+     611 | Bandung |        110 | 2020-04-19 03:57:07.783568+07
+     612 | Jakarta |        110 | 2020-04-19 03:57:07.783568+07
+(2 rows)
+
+TEST CASE 1: Menghapus data pada country
+
+Delete from country where country_id = 110;
+
+praktikum1=# select * from country where country_id = 110;
+ country_id | country | last_update
+------------+---------+-------------
+(0 rows)
+
+praktikum1=# select * from city where country_id =110;
+ city_id | city | country_id | last_update
+---------+------+------------+-------------
+(0 rows)
+
+TEST CASE 2 : Menghapus data pada city
+
+Kondisi sebelumnya :
+
+
+praktikum1=# select * from country where country_id = 110;
+ country_id |  country  |          last_update
+------------+-----------+-------------------------------
+        110 | Indonesia | 2020-04-19 03:58:18.381849+07
+(1 row)
+
+praktikum1=# select * from city where country_id =110;
+ city_id |  city   | country_id |          last_update
+---------+---------+------------+-------------------------------
+     613 | Bandung |        110 | 2020-04-19 03:57:07.783568+07
+     614 | Jakarta |        110 | 2020-04-19 03:57:07.783568+07
+(2 rows)
+
+Delete from city where city ='Bandung';
+
+praktikum1=# select * from country where country_id = 110;
+ country_id | country | last_update
+------------+---------+-------------
+(0 rows)
+
+praktikum1=# select * from city where country_id =110;
+ city_id | city | country_id | last_update
+---------+------+------------+-------------
+(0 rows)
+
+
+
+
